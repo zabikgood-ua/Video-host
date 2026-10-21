@@ -1,0 +1,142 @@
+HTML
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101827">
+<title>Видео от Андрея</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101827;color:#f5f7fb;font-family:Arial,sans-serif}
+header{padding:24px 18px;background:#182438}
+h1{margin:0;font-size:25px}
+header p{color:#b9c6d9;margin-bottom:0}
+main{max-width:850px;margin:auto;padding:18px}
+input,button,select{font:inherit;padding:12px;border-radius:10px;border:1px solid #43516a}
+input{background:#fff;color:#111;width:100%;margin-bottom:10px}
+button{background:#4f7cff;color:white;cursor:pointer;border:0}
+.row{display:flex;gap:8px}
+.row button{flex:1}
+h2{font-size:20px;margin-top:25px}
+.categories{display:flex;gap:8px;flex-wrap:wrap}
+.categories button{background:#26364e}
+.categories button.active{background:#4f7cff}
+.card{background:#1a273b;padding:15px;border-radius:14px;margin-top:12px}
+.card p{color:#b9c6d9}
+a{color:#a9c4ff}
+#player iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:12px}
+.small{font-size:13px;color:#aebbd0;line-height:1.5}
+footer{text-align:center;padding:30px;color:#9eacc1}
+</style>
+</head>
+<body>
+<header>
+<h1>▶ Видео от Андрея</h1>
+<p>Смотри интересное. Выбирай сам. Без бесконечной ленты.</p>
+</header>
+<main>
+<div class="card">
+<h2 style="margin-top:0">Добавить обычное видео</h2>
+<input id="url" placeholder="Вставь ссылку на YouTube">
+<input id="title" placeholder="Название видео">
+<div class="row">
+<select id="category" style="flex:1;min-width:0">
+<option>Наука</option>
+<option>Природа</option>
+<option>Футбол</option>
+<option>Игры</option>
+<option>Техника</option>
+<option>Обучение</option>
+<option>Другое</option>
+</select>
+<button onclick="addVideo()">Добавить</button>
+</div>
+<p class="small">Добавляй видео, которые хочешь сохранить. Ссылки Shorts не принимаются.</p>
+</div>
+
+<h2>Найти видео в своей коллекции</h2>
+<input id="search" placeholder="Поиск по названию..." oninput="render()">
+<div class="categories" id="categories"></div>
+<div id="player"></div>
+<div id="videos"></div>
+<footer>Видео от Андрея · Версия 0.1</footer>
+</main>
+<script>
+const KEY='andrii-video-list';
+let videos=[];
+try{videos=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){}
+let selected='Все';
+let current=null;
+
+function save(){
+ try{localStorage.setItem(KEY,JSON.stringify(videos))}
+ catch(e){alert('Не удалось сохранить коллекцию в браузере.')}
+}
+
+function getId(url){
+ try{
+  const u=new URL(url);
+  if(u.hostname==='youtu.be') return u.pathname.slice(1).split('/')[0];
+  if(!/(^|\.)youtube\.com$/.test(u.hostname)) return null;
+  if(u.pathname==='/watch') return u.searchParams.get('v');
+  if(u.pathname.startsWith('/shorts/')) return 'SHORTS';
+  if(u.pathname.startsWith('/embed/')) return u.pathname.split('/')[2];
+ }catch(e){}
+ return null;
+}
+
+function addVideo(){
+ const url=document.getElementById('url').value.trim();
+ const title=document.getElementById('title').value.trim();
+ const category=document.getElementById('category').value;
+ const id=getId(url);
+ if(id==='SHORTS'){alert('Shorts добавлять нельзя. Выбери обычное видео.');return}
+ if(!id||!title){alert('Введи корректную ссылку YouTube и название видео.');return}
+ if(videos.some(v=>v.id===id)){alert('Это видео уже добавлено.');return}
+ videos.unshift({id,title,category});
+ save();
+ document.getElementById('url').value='';
+ document.getElementById('title').value='';
+ selected='Все';
+ render();
+}
+
+function play(id){
+ current=id;
+ const v=videos.find(x=>x.id===id);
+ if(!v)return;
+ document.getElementById('player').innerHTML=
+ '<div class="card"><h2>'+escapeHtml(v.title)+'</h2>'+
+ '<iframe src="https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id)+'?autoplay=0&rel=0" title="YouTube video player" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe>'+
+ '<p class="small">После просмотра выбери следующее видео самостоятельно.</p></div>';
+ window.scrollTo({top:document.getElementById('player').offsetTop-10,behavior:'smooth'});
+}
+
+function escapeHtml(s){
+ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function render(){
+ const q=document.getElementById('search').value.toLowerCase();
+ const cats=['Все',...new Set(videos.map(v=>v.category))];
+ document.getElementById('categories').innerHTML=cats.map(c=>
+ '<button class="'+(selected===c?'active':'')+'" onclick="selected='+JSON.stringify(c)+';render()">'+escapeHtml(c)+'</button>'
+ ).join('');
+ const list=videos.filter(v=>(selected==='Все'||v.category===selected)&&v.title.toLowerCase().includes(q));
+ document.getElementById('videos').innerHTML=list.length?list.map(v=>
+ '<div class="card"><strong>'+escapeHtml(v.title)+'</strong><p>'+escapeHtml(v.category)+'</p>'+
+ '<div class="row"><button onclick="play('+JSON.stringify(v.id)+')">▶ Смотреть</button>'+
+ '<button onclick="removeVideo('+JSON.stringify(v.id)+')" style="background:#7b3542">Удалить</button></div></div>'
+ ).join(''):'<p class="small">Пока здесь нет видео. Добавь первое видео по ссылке YouTube.</p>';
+}
+
+function removeVideo(id){
+ videos=videos.filter(v=>v.id!==id);
+ if(current===id){current=null;document.getElementById('player').innerHTML=''}
+ save();render();
+}
+render();
+</script>
+</body>
+</html>
